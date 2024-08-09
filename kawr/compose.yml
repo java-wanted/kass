@@ -1,0 +1,17 @@
+services:
+  kawr:
+    image: eclipse-temurin:11.0.20_8-jre-alpine
+    container_name: kawr
+    hostname: kawr
+    command: "/opt/kawr/bin/kawr"
+    networks:
+      - kanet
+    environment:
+      - BOOTSTRAP_SERVERS=kafka-2:9092
+    volumes:
+      - ./build/install/kawr:/opt/kawr
+
+networks:
+  kanet:
+    external: true
+    name: kassnet

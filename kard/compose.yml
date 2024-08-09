@@ -1,0 +1,17 @@
+services:
+  kard:
+    image: eclipse-temurin:11.0.20_8-jre-alpine
+    container_name: kard
+    hostname: kard
+    command: "/opt/kard/bin/kard"
+    networks:
+      - kanet
+    environment:
+      - BOOTSTRAP_SERVERS=kafka-1:9092
+    volumes:
+      - ./build/install/kard:/opt/kard
+
+networks:
+  kanet:
+    external: true
+    name: kassnet
