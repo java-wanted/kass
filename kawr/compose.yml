@@ -8,8 +8,12 @@ services:
       - kanet
     environment:
       - BOOTSTRAP_SERVERS=kafka-2:9092
+      - SECURITY_SSL=yes
+      - SSL_TRUSTSTORE_LOCATION=/opt/certs/kafka.truststore.jks
+      - SSL_TRUSTSTORE_PASSWORD=askass
     volumes:
       - ./build/install/kawr:/opt/kawr
+      - ../secrets/certs/kafka.truststore.jks:/opt/certs/kafka.truststore.jks
 
 networks:
   kanet:

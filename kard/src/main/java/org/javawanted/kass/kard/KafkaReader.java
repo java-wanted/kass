@@ -79,6 +79,12 @@ class KafkaReader {
         );
         prop.put("bootstrap.servers", conf.BOOTSTRAP_SERVERS);
 
+        if (conf.SECURITY_SSL.equals("yes")) {
+            prop.put("security.protocol", "SSL");
+            prop.put("ssl.truststore.location", conf.SSL_TRUSTSTORE_LOCATION);
+            prop.put("ssl.truststore.password", conf.SSL_TRUSTSTORE_PASSWORD);
+        }
+
         var topic = "1";
 
         System.out.printf(
