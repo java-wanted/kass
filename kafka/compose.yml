@@ -1,29 +1,25 @@
 services:
-  zookeeper:
-    image: zookeeper
-    container_name: zookeeper
-    ports:
-      - "2181"
-    networks:
-      - kanet
-
   kafka-1:
-    image: wurstmeister/kafka
+    image: apache/kafka
     container_name: kafka-1
     hostname: kafka-1
     expose:
       - 9092
+      - 9093
     ports:
       - "19092:19092"
     networks:
       - kanet
     environment:
-      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
-      - KAFKA_BROKER_ID=1
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERN:SSL,EXTERN:PLAINTEXT
-      - KAFKA_LISTENERS=INTERN://:9092,EXTERN://:19092
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9093,2@kafka-2:9093
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROL:SSL,INTERN:SSL,EXTERN:PLAINTEXT
+      - KAFKA_LISTENERS=CONTROL://:9093,INTERN://:9092,EXTERN://:19092
       - KAFKA_ADVERTISED_LISTENERS=INTERN://kafka-1:9092,EXTERN://localhost:19092
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROL
       - KAFKA_INTER_BROKER_LISTENER_NAME=INTERN
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
       - KAFKA_SSL_KEYSTORE_LOCATION=/opt/kafka/config/certs/kafka.keystore.jks
       - KAFKA_SSL_KEYSTORE_PASSWORD=askass
       - KAFKA_SSL_KEY_PASSWORD=askass
@@ -32,26 +28,28 @@ services:
     volumes:
       - ../secrets/certs/kafka-1.keystore.jks:/opt/kafka/config/certs/kafka.keystore.jks
       - ../secrets/certs/kafka.truststore.jks:/opt/kafka/config/certs/kafka.truststore.jks
-    depends_on:
-      - zookeeper
 
   kafka-2:
-    image: wurstmeister/kafka
+    image: apache/kafka
     container_name: kafka-2
     hostname: kafka-2
     expose:
       - 9092
+      - 9093
     ports:
       - "29092:29092"
     networks:
       - kanet
     environment:
-      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
-      - KAFKA_BROKER_ID=2
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERN:SSL,EXTERN:PLAINTEXT
-      - KAFKA_LISTENERS=INTERN://:9092,EXTERN://:29092
-      - KAFKA_ADVERTISED_LISTENERS=INTERN://kafka-2:9092,EXTERN://localhost:29092
+      - KAFKA_NODE_ID=2
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-1:9093,2@kafka-2:9093
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROL:SSL,INTERN:SSL,EXTERN:PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROL
       - KAFKA_INTER_BROKER_LISTENER_NAME=INTERN
+      - KAFKA_LISTENERS=CONTROL://:9093,INTERN://:9092,EXTERN://:29092
+      - KAFKA_ADVERTISED_LISTENERS=INTERN://kafka-2:9092,EXTERN://localhost:29092
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
       - KAFKA_SSL_KEYSTORE_LOCATION=/opt/kafka/config/certs/kafka.keystore.jks
       - KAFKA_SSL_KEYSTORE_PASSWORD=askass
       - KAFKA_SSL_KEY_PASSWORD=askass
@@ -60,8 +58,6 @@ services:
     volumes:
       - ../secrets/certs/kafka-2.keystore.jks:/opt/kafka/config/certs/kafka.keystore.jks
       - ../secrets/certs/kafka.truststore.jks:/opt/kafka/config/certs/kafka.truststore.jks
-    depends_on:
-      - zookeeper
 
 networks:
   kanet:
