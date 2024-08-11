@@ -1,24 +1,19 @@
 #!/bin/bash
 #
-# Commands to generate keys are copied from a script presented in Kafka
-# Development With Docker - Part 8 SSL Encryption by Jaehyeon Kim.
-
-CN="askass"
-KASSWD="askass"
+# Generage SSL certificates for Kafka services
+#
+# Sign certificates with a custom CA.
 
 CA_DIR="ca"
-SE_DIR="certs"
+CA_PAS="cakass"
+CA_STO="ca.jks"
 
-CA_KEY="ca-key"
-CA_CERT="ca-cert"
+KA_DIR="certs"
+KA_PAS="askass"
+KA_STO="\$host.keystore.jks"
+KA_TRU="kafka.truststore.jks"
 
-KS_REQ="cert-file"
-KS_REQ_SRL="ca-cert.srl"
-KS_CERT="cert-signed"
-
-TS_STORE="kafka.truststore.jks"
-
-KA_HOSTS="kafka-1 kafka-2"
+KA_HOS="kafka-1 kafka-2"
 
 die() {
     echo "ERROR: $1"
@@ -26,62 +21,86 @@ die() {
 }
 
 mkca() {
-    if [ -f "$CA_DIR/$CA_KEY" ] && [ -f "$CA_DIR/$CA_CERT" ] ; then
-        return
-    fi
+    [ -f "$CA_DIR/$CA_STO" ] && return
 
-    rm -r "$CA_DIR"
+    rm -rf "$CA_DIR"
     mkdir "$CA_DIR"
 
-    openssl req -new -newkey rsa:4096 -days 10 -x509 -subj "/CN=$CN" \
-            -keyout $CA_DIR/$CA_KEY -out $CA_DIR/$CA_CERT -nodes \
-        || die "filed to create CA"
-}
-
-mkks() {
-    local khost="$1"
-    local kstore="$khost.keystore.jks"
-
-    keytool -genkey -keystore "$SE_DIR/$kstore" \
-            -alias localhost -validity 10 -keyalg RSA \
-            -noprompt -dname "CN=$khost" -keypass $KASSWD -storepass $KASSWD \
-        || die "failed to create keystore for $khost"
-
-    keytool -certreq -keystore "$SE_DIR/$kstore" \
-            -alias localhost -file $KS_REQ -keypass $KASSWD -storepass $KASSWD \
-        || die "failed to create signing request for $khost"
-
-    openssl x509 -req -CA $CA_DIR/$CA_CERT -CAkey $CA_DIR/$CA_KEY \
-            -in $KS_REQ -out $KS_CERT -days 10 -CAcreateserial \
-        || die "failed to sign $khost keystore"
-
-    keytool -keystore "$SE_DIR/$kstore" -alias CARoot -import \
-            -file $CA_DIR/$CA_CERT -keypass $KASSWD -storepass $KASSWD \
-            -noprompt \
-        || die "failed to import CA into $khost keystore"
-
-    keytool -keystore "$SE_DIR/$kstore" -alias localhost \
-            -import -file $KS_CERT -keypass $KASSWD -storepass $KASSWD \
-        || die "failed to import signed cert into $khost keystore"
-
-    rm $CA_DIR/$KS_REQ_SRL $KS_REQ $KS_CERT \
-        || die "failed to clean temps"
+    keytool -genkeypair -alias ca -validity 10 -keyalg RSA \
+            -storepass "$CA_PAS" -keystore "$CA_DIR/$CA_STO" \
+            -dname "cn=ca" -ext "bc=ca:true,pathlen:3" \
+        || die "filed to cerate CA keystore"
 }
 
 mkts() {
-    keytool -keystore $SE_DIR/$TS_STORE -alias CARoot -import \
-            -file $CA_DIR/$CA_CERT -noprompt -dname "CN=$CN" \
-            -keypass $KASSWD -storepass $KASSWD \
-        || die "failed to create truststore"
+    local cert="$KA_DIR/trust.cert"
+
+    rm -f "$KA_DIR/$KA_TRU"
+
+    keytool -exportcert -alias ca \
+            -storepass "$CA_PAS" -keystore "$CA_DIR/$CA_STO" \
+            -file "$cert" \
+        || die "failed to export CA CERT"
+
+    keytool -import -alias ca \
+            -storepass "$KA_PAS" -keystore "$KA_DIR/$KA_TRU" \
+            -noprompt -trustcacerts -file "$cert" \
+        || die "failed to import CA CERT into Trust"
+
+    rm -f "$cert"
 }
 
+mkks() {
+    local host="$1"
+    local store=$(eval echo "$KA_DIR/$KA_STO")
+    local csr="$KA_DIR/$host.csr"
+    local cert="$KA_DIR/$host.cert"
+
+    rm -f "$store"
+
+    keytool -genkeypair -alias kafka -validity 10 -keyalg RSA \
+            -storepass "$KA_PAS" -keystore "$store" \
+            -dname "cn=kafka" -ext "san=dns:$host" \
+        || die "failed to create $host keystore"
+
+    keytool -exportcert -alias ca \
+            -storepass "$CA_PAS" -keystore "$CA_DIR/$CA_STO" \
+            -file "$cert" \
+        || die "failed to export CA CERT for $host"
+
+    keytool -importcert -alias ca \
+            -storepass "$KA_PAS" -keystore "$store" \
+            -noprompt -file "$cert"
+
+    keytool -certreq -alias kafka -keyalg RSA \
+            -storepass "$KA_PAS" -keystore "$store" \
+            -noprompt -file "$csr" \
+        || die "failed to create $host CSR"
+
+    keytool -gencert -alias ca -validity 10 \
+            -storepass "$CA_PAS" -keystore "$CA_DIR/$CA_STO" \
+            -infile "$csr" -outfile "$cert" \
+            -ext "san=dns:$host" \
+        || die "failed to create $host CERT"
+
+    keytool -importcert -alias kafka \
+            -keyalg RSA -storepass "$KA_PAS" -keystore "$store" \
+            -noprompt -file "$cert" \
+        || die "failed to import $host CERT"
+
+    keytool -delete -alias ca \
+            -storepass "$KA_PAS" -keystore "$store" \
+        || die "failed to remove CA from $host"
+
+    rm "$csr" "$cert"
+}
+
+rm -rf "$KA_DIR"
+mkdir "$KA_DIR"
+
 mkca
+mkts
 
-rm -rf $SE_DIR
-mkdir $SE_DIR
-
-for host in $KA_HOSTS ; do
+for host in $KA_HOS ; do
     mkks "$host"
 done
-
-mkts
