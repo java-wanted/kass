@@ -80,7 +80,7 @@ mkks() {
     keytool -gencert -alias ca -validity 10 \
             -storepass "$CA_PAS" -keystore "$CA_DIR/$CA_STO" \
             -infile "$csr" -outfile "$cert" \
-            -ext "san=dns:$host" \
+            -ext "san=dns:$host,dns:localhost" \
         || die "failed to create $host CERT"
 
     keytool -importcert -alias kafka \
